@@ -48,7 +48,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Verify repository default branch is "testing"
+      - name: Verify repository default branch is "satanic-branding"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
