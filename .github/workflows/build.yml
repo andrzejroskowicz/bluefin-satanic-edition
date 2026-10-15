@@ -170,7 +170,8 @@ jobs:
           BST_FLAGS: -o x86_64_v3 false --no-interactive --config /src/buildstream-ci.conf
         run: |
           set +e
-          BST_SHOW_OUT=$(just bst show --deps all --format "%{name}" \
+          BST_SHOW_OUT=$(timeout --signal=TERM --kill-after=5s 55s \
+            just bst show --deps all --format "%{name}" \
             ${{ matrix.element }} 2>&1)
           rc=$?
           set -e
@@ -180,7 +181,11 @@ jobs:
             echo "Element graph: ${TOTAL} elements"
           else
             echo "$BST_SHOW_OUT"
-            echo "::warning::bst show failed (rc=${rc}) — progress will show absolute counts only"
+            if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+              echo "::warning::bst show hit the 1-minute limit — progress will show absolute counts only"
+            else
+              echo "::warning::bst show failed (rc=${rc}) — progress will show absolute counts only"
+            fi
             echo "total=0" >> "$GITHUB_OUTPUT"
           fi
 
