@@ -23,7 +23,7 @@ on:
   workflow_dispatch:
   # Label a same-repo PR `build` to build it; adding the label starts a run.
   pull_request:
-    branches: [testing]
+    branches: [satanic-branding]
     types: [opened, synchronize, reopened, labeled]
 
 permissions: read-all
