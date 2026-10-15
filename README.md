@@ -10,7 +10,7 @@ This project takes inspiration from the old [Ubuntu Satanic Edition](https://ubu
 
 The current wallpaper features a blazing pentagram above a gothic landscape. It is included in the image and is the only wallpaper offered by the custom wallpaper chooser.
 
-![Bluefin Satanic Edition wallpaper: a fiery pentagram above a gothic landscape](files/satanic-wallpapers/satanic.png)
+![Bluefin Satanic Edition wallpaper: a fiery pentagram above a gothic landscape](files/satanic-wallpapers/satanic-name.png)
 
 The desktop defaults to dark mode with a red GNOME accent. Tiling Shell is opt-in, Caffeine runs without notifications, and Blur my Shell uses dynamic panel blur.
 
