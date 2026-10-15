@@ -1,17 +1,11 @@
 kind: manual
 
 sources:
-  # - kind: git_repo
-  #   url: github:ublue-os/artwork.git
-  #   track: main
-- kind: tar
-  url: github_files:ublue-os/artwork/releases/download/bluefin-v2026-08-21/bluefin-wallpapers-gnome.tar.zstd
-  ref: b3c5332f28c06265aa39284c0e1fad5ec970860d06737ebae24072a17cb52bf4
-  base-dir: ""
+- kind: local
+  path: files/satanic-wallpapers
 
 build-depends:
 - core/sandbox-tools.bst
-- freedesktop-sdk.bst:components/sed.bst
 - freedesktop-sdk.bst:public-stacks/runtime-minimal.bst
 
 variables:
@@ -20,8 +14,11 @@ variables:
 config:
   install-commands:
   - |
-    sed -i 's|~\/\.local\/share|\/usr\/share|' *.xml gnome-background-properties/*.xml
-    mkdir -p "%{install-root}%{datadir}/backgrounds/bluefin"
-    cp -r *.jxl *.xml "%{install-root}%{datadir}/backgrounds/bluefin"
-    cp -r gnome-background-properties "%{install-root}%{datadir}/gnome-background-properties"
+    for image in *.png; do
+      install -Dm644 "$image" "%{install-root}%{datadir}/backgrounds/bluefin/$image"
+    done
+    for month in 01 02 03 04 05 06 07 08 09 10 11 12; do
+      install -Dm644 satanic.xml.in "%{install-root}%{datadir}/backgrounds/bluefin/${month}-bluefin.xml"
+    done
+    install -Dm644 satanic-wallpapers.xml "%{install-root}%{datadir}/gnome-background-properties/satanic-wallpapers.xml"
   - "%{install-extra}"

@@ -38,6 +38,7 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(self.select("--group", "kernels"), [x[0] for x in updater.KERNELS])
         self.assertEqual(self.select("--element", "core/linux-ogc.bst"), ["core/linux-ogc.bst"])
         self.assertEqual(self.select("--group", "tarballs"), list(updater.RELEASES))
+        self.assertNotIn("bluefin/wallpapers.bst", updater.RELEASES)
         self.assertEqual(self.select("--group", "core-junctions"), [updater.CORE])
         self.assertEqual(self.select("--element", "bluefin/gum.bst"), ["bluefin/gum.bst"])
 
@@ -63,13 +64,14 @@ class SelectionTests(unittest.TestCase):
             update.assert_not_called()
 
     def test_failure_continues_and_returns_nonzero(self):
+        first_release = next(iter(updater.RELEASES))
         with mock.patch.object(updater, "update", side_effect=[ValueError("broken")] +
                                [None] * (len(updater.RELEASES) - 1)) as update, \
                 contextlib.redirect_stdout(io.StringIO()), \
                 contextlib.redirect_stderr(io.StringIO()) as err:
             self.assertEqual(updater.main(["--group", "tarballs"]), 1)
         self.assertEqual(update.call_count, len(updater.RELEASES))
-        self.assertIn("bluefin/wallpapers.bst", err.getvalue())
+        self.assertIn(first_release, err.getvalue())
 
     def test_matrix_preserves_review_notes_and_adds_oci_source(self):
         items = {x["element"]: x for x in updater.matrix()["include"]}

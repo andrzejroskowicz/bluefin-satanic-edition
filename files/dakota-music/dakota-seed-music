@@ -1,0 +1,25 @@
+#!/usr/bin/bash
+set -euo pipefail
+
+source_dir=/usr/share/dakota/music
+music_dir="$HOME/Music"
+
+if command -v xdg-user-dir >/dev/null 2>&1; then
+    configured_music_dir="$(xdg-user-dir MUSIC 2>/dev/null || true)"
+    if [ -n "$configured_music_dir" ]; then
+        music_dir="$configured_music_dir"
+    fi
+fi
+
+install -d "$music_dir"
+marker="$music_dir/.dakota-satanic-music-seeded"
+if [ -e "$marker" ]; then
+    exit 0
+fi
+
+for track in "$source_dir"/*.mp3; do
+    [ -f "$track" ] || continue
+    cp -n -- "$track" "$music_dir/"
+done
+
+touch "$marker"

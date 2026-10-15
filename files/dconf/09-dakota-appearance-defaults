@@ -1,0 +1,4 @@
+# System defaults for the Dakota desktop. User dconf values can override these.
+[org/gnome/desktop/interface]
+color-scheme='prefer-dark'
+accent-color='red'

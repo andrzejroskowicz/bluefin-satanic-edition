@@ -1,0 +1,10 @@
+[Unit]
+Description=Copy Dakota music into the user Music folder
+ConditionPathExists=/usr/share/dakota/music
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/dakota-seed-music
+
+[Install]
+WantedBy=default.target

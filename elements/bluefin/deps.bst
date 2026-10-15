@@ -31,6 +31,8 @@ depends:
 
   - bluefin/common.bst
   - bluefin/user-avatars.bst
+  - bluefin/appearance-defaults.bst
+  - bluefin/satanic-music.bst
   - bluefin/just-overrides.bst
   - bluefin/zswap-config.bst
   - bluefin/swapfile.bst

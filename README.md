@@ -1,95 +1,40 @@
-# Bluefin Dakota
-*Dakotaraptor steini*
+# Bluefin Satanic Edition
 
-[Bluefin](https://projectbluefin.io) built on [GNOME OS](https://os.gnome.org/), assembled entirely from source.
+*A personal reboot of Ubuntu Satanic Edition, reborn on Bluefin Dakota.*
 
-<a href="https://docs.projectbluefin.io/changelogs">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://docs.projectbluefin.io/img/cards/dakota-dark.png">
-    <img src="https://docs.projectbluefin.io/img/cards/dakota-light.png" alt="Bluefin Dakota" width="800">
-  </picture>
-</a>
+Bluefin Satanic Edition is a dark, red-accented GNOME desktop with fiery artwork and metal in the Music folder. It is built on Project Bluefin’s Dakota image, which uses GNOME OS and bootc, and is assembled from source with BuildStream.
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/projectbluefin/dakota)
+This project takes inspiration from the old [Ubuntu Satanic Edition](https://ubuntusatanic.org/about/), an Ubuntu-based community remix that paired free software with dark artwork and metal music. This is an independent, modern reboot of that idea; it is not an Ubuntu-based image or an official continuation of the original project.
 
-**Alpha** — [filing issues](https://github.com/projectbluefin/dakota/issues) is the whole point.
+## The look
 
-## Built-in feedback loop
+The current wallpaper features a blazing pentagram above a gothic landscape. It is included in the image and is the only wallpaper offered by the custom wallpaper chooser.
 
-Dakota doesn't eat tickets, it treats them as evidence.
+![Bluefin Satanic Edition wallpaper: a fiery pentagram above a gothic landscape](files/satanic-wallpapers/satanic.png)
 
-Every user running Dakota is part of a structured loop that flows directly back into upstream GNOME, freedesktop, and the kernel. When something breaks on your hardware, you have three commands:
+The desktop defaults to dark mode with a red GNOME accent. Tiling Shell is opt-in, Caffeine runs without notifications, and Blur my Shell uses dynamic panel blur.
 
-| Command | What it does |
-|---|---|
-| `ujust report` | Captures your system state and opens a pre-filled issue. One command instead of a wall of "please attach logs." |
-| `ujust confirm <issue>` | Tells the team your hardware hits the same bug. Adds a hardware fingerprint to the issue — no duplicate filing. |
-| `ujust verify <issue>` | After a fix ships in a nightly, confirms it works on your machine. Closes the loop with evidence. |
+## Music
 
-No telemetry. No phone-home. Every report is reviewed by you before it leaves your machine, lives in a gist you own, and can be deleted anytime.
+The image includes two tracks, copied into each user’s Music folder at first login:
 
-When three users independently run `ujust verify` on a fix, that issue closes with real confidence — not just "we think this is fixed."
+- **Infernal Descent**
+- **Lord Beneath the Flame**
 
-### The hardware layer
+[Gapless](https://flathub.org/en/apps/com.github.neithern.g4music), a GTK music player, is included as a default Flatpak preinstall. Flatpak preinstalls are processed during first boot, so the app is installed when the machine is online.
 
-Each Dakota installation is designed to run as a hardware diagnostic lab for itself. When will you find your first?
+## Build the NVIDIA gaming image
 
-[Read the full feedback loop design](docs/feedback-loop.md)
-
-## The research behind it
-
-Dakota is human driven with contribution workflows for agents, so if you have tokens to donate, ask it to review issues or PRs, it's useful! The humans make the final decisions. We coordinate this project via a tool called [Hive](https://github.com/kubestellar/hive) from Kubestellar, a CNCF Sandbox project.
-
-Dakota's feedback loop model is grounded in Andy Anderson's work on autonomous AI-assisted software development. The core finding: the intelligence of a system like this lives not in any single model, but in the infrastructure of instructions, tests, metrics, and feedback loops surrounding it.
-
-- [The AI Codebase Maturity Model](https://arxiv.org/abs/2604.09388) — the arxiv paper
-- [When AI agents become contributors](https://www.cncf.io/blog/2026/05/14/when-ai-agents-become-contributors-how-kubestellar-reached-81-pr-acceptance/) — CNCF blog
-- [Beyond prompting: How KubeStellar reached 81% PR acceptance](https://thenewstack.io/ai-codebase-maturity-model/) — The New Stack
-- [KubeStellar Hive](https://github.com/kubestellar/hive) — the reference implementation Dakota draws from
-
-## Help shape what gets built
-
-**Architects and designers** — these features and epics need your input before any code is written. Design decisions, tradeoffs, and priorities:
-
-### [Open issues needing triage &rarr;](https://github.com/projectbluefin/dakota/issues?q=is%3Aopen+label%3Aneeds-triage)
-
-Leave a comment, challenge the design, propose alternatives. When an issue reaches consensus a maintainer marks it with `/triage accepted`.
-
-**Engineers** — these issues have clear acceptance criteria and no open design questions. Pick one up and build it:
-
-### [Triage-accepted queue &rarr;](https://github.com/projectbluefin/dakota/issues?q=is%3Aopen+label%3Atriage%2Faccepted+no%3Aassignee)
-
-Assign yourself with `/assign`. See [docs/workflow.md](docs/workflow.md) for the contributor workflow.
-
-## Image streams
-
-|        Tag |  Stream |                                                                                                    What it is |
-| ---------: | ------: | ------------------------------------------------------------------------------------------------------------: |
-|  `:stable` |  Stable |                        GNOME 50 — production. On-demand promotion from `:testing` via `just release --apply`. |
-| `:testing` |     Dev |                                              GNOME 50 — daily builds from `testing` branch. Boot-check gated. |
-|    `:next` |  Paused |                                     GNOME master. Paused until the next GNOME beta; receives no updates. |
-|     `:btw` |  Paused |                                                                                            Alias for `:next`. |
-
-`:next` / `:btw` is paused until the next GNOME beta and no longer receives updates, including security fixes. If you are on it, switch to `:testing`. Moving from GNOME master back to the current release is a downgrade, so some settings or app data written by the newer GNOME may not carry over.
+This is the personal target for this project. On a Linux host with `just` and `podman`, from the repository root run:
 
 ```bash
-sudo bootc switch ghcr.io/projectbluefin/dakota:testing
+BUILD_GAMING=true just build nvidia
 ```
 
-## ISO Download
+The command builds and exports `dakota-nvidia-gaming:latest` to the local Podman image store. BuildStream runs inside the project’s configured container. For build and contribution details, see [AGENTS.md](AGENTS.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
-[dakota-live-latest.iso](https://projectbluefin.dev/dakota-live-latest.iso) · [Checksum](https://projectbluefin.dev/dakota-live-latest.iso-CHECKSUM)
+## AI and project disclaimer
 
+**AI-use notice:** Some or all of the artwork, music, and supporting project materials were created with generative AI, with human direction and editing. They may contain errors or artifacts, and their provenance may not always be independently verifiable.
 
-## Known gaps
-
-- Installation path is still being worked on
-- Upgrades and rollbacks need more hardening
-
-See the [open issues](https://github.com/projectbluefin/dakota/issues) for where things stand.
-
-## Contributing or building from source
-
-See [AGENTS.md](AGENTS.md) for the full contributor workflow, build instructions, and PR checklist.
-
-![Dakorator](https://github.com/user-attachments/assets/ee92291d-a617-496e-abb6-9045a4c665ce)
+This is an independent personal project. It is not affiliated with Canonical, Ubuntu, the original Ubuntu Satanic Edition project, or Project Bluefin. Product names and trademarks belong to their respective owners.

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE wallpapers SYSTEM "gnome-wp-list.dtd">
+<wallpapers>
+  <wallpaper deleted="false">
+    <name>Satanic Edition</name>
+    <filename>/var/lib/ublue-os/current-bluefin.xml</filename>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Goat</name>
+    <filename>/usr/share/backgrounds/bluefin/Goat.png</filename>
+    <options>zoom</options>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Our Lord</name>
+    <filename>/usr/share/backgrounds/bluefin/Our-Lord.png</filename>
+    <options>zoom</options>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Cathedral</name>
+    <filename>/usr/share/backgrounds/bluefin/cathedral.png</filename>
+    <options>zoom</options>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Goat Skull</name>
+    <filename>/usr/share/backgrounds/bluefin/goat-skull.png</filename>
+    <options>zoom</options>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Sabbath</name>
+    <filename>/usr/share/backgrounds/bluefin/sabath.png</filename>
+    <options>zoom</options>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Satanic Name</name>
+    <filename>/usr/share/backgrounds/bluefin/satanic-name.png</filename>
+    <options>zoom</options>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Town</name>
+    <filename>/usr/share/backgrounds/bluefin/town.png</filename>
+    <options>zoom</options>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Unholy Cathedral</name>
+    <filename>/usr/share/backgrounds/bluefin/unholy-cathedral.png</filename>
+    <options>zoom</options>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Village</name>
+    <filename>/usr/share/backgrounds/bluefin/village-day.png</filename>
+    <filename-dark>/usr/share/backgrounds/bluefin/village-night.png</filename-dark>
+    <options>zoom</options>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Void Ritual</name>
+    <filename>/usr/share/backgrounds/bluefin/void-ritual.png</filename>
+    <options>zoom</options>
+  </wallpaper>
+</wallpapers>

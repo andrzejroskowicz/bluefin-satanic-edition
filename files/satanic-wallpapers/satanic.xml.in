@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<background>
+  <starttime>
+    <year>2007</year><month>1</month><day>1</day>
+    <hour>0</hour><minute>0</minute><second>0</second>
+  </starttime>
+  <static>
+    <duration>1795.0</duration>
+    <file>/usr/share/backgrounds/bluefin/satanic.png</file>
+  </static>
+  <transition type="overlay">
+    <duration>5.0</duration>
+    <from>/usr/share/backgrounds/bluefin/satanic.png</from>
+    <to>/usr/share/backgrounds/bluefin/satanic.png</to>
+  </transition>
+</background>

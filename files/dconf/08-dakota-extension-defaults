@@ -18,3 +18,10 @@ start-stop-only=true
 
 [org/gnome/shell/extensions/blur-my-shell/popup]
 blur=true
+
+[org/gnome/shell/extensions/caffeine]
+show-notifications=false
+
+[org/gnome/shell/extensions/blur-my-shell/panel]
+blur=true
+static-blur=false

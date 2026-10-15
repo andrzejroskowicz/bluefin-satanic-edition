@@ -25,6 +25,10 @@ depends:
 public:
   bst:
     integration-commands:
+      # Keep only the Satanic Edition artwork and its GNOME chooser entry.
+      - find /usr/share/backgrounds -mindepth 1 -maxdepth 1 ! -name bluefin -exec rm -rf {} +
+      - find /usr/share/gnome-background-properties -mindepth 1 ! -name satanic-wallpapers.xml -exec rm -rf {} +
+
       # Overwrite the zram-generator config from gnomeos-deps/zram-generator.bst.
       # An element-level override loses the staging-order overlap (see
       # .agents/skills/dakota-buildstream/SKILL.md); integration commands run after all staging,
