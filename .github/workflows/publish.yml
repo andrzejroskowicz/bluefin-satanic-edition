@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       source_sha:
-        description: 'Existing BuildStream artifact SHA to republish (recovery only)'
+        description: 'Commit SHA of an existing staged GHCR image to republish (recovery only)'
         required: false
         type: string
         default: ''
@@ -12,10 +12,7 @@ on:
     workflows: ["Build Bluefin dakota"]
     types: [completed]
     branches:
-      - next
-      - 'gh-readonly-queue/next/**'
-      - testing
-      - 'gh-readonly-queue/testing/**'
+      - satanic-branding
 
 env:
   IMAGE_NAME: dakota
@@ -29,7 +26,7 @@ permissions:
   actions: read
 
 concurrency:
-  # Separate publish queues per branch so next and testing don't collide.
+  # Keep publication runs for each source branch serialized.
   group: publish-${{ github.event.workflow_run.head_branch || github.ref_name }}
   cancel-in-progress: false
 
@@ -47,10 +44,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event != 'pull_request' &&
-       (github.event.workflow_run.head_branch == 'next' ||
-        startsWith(github.event.workflow_run.head_branch, 'gh-readonly-queue/next/') ||
-        github.event.workflow_run.head_branch == 'testing' ||
-        startsWith(github.event.workflow_run.head_branch, 'gh-readonly-queue/testing/')))
+       github.event.workflow_run.head_branch == 'satanic-branding')
     steps:
       - name: Resolve build SHA and trigger event
         id: context
@@ -69,61 +63,34 @@ jobs:
             BRANCH="${{ github.ref_name }}"
           fi
           echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
-          # Derive the :testing tag from the branch name.
-          # Only trunk branches (direct pushes / schedule) advance stream tags.
-          # Merge-queue builds (gh-readonly-queue/**) publish an immutable :SHA
-          # tag only — they must NOT move public stream tags before the commit lands.
-          # testing  → :testing  (published daily on schedule)
-          # next     → :next     (rolling GNOME master / bleeding edge)
-          # queue/** → (empty)   :SHA only, no stream tag
-          if [[ "$BRANCH" == "next" ]]; then
-            echo "testing_tag=next" >> "$GITHUB_OUTPUT"
-          elif [[ "$BRANCH" == "testing" ]]; then
-            echo "testing_tag=testing" >> "$GITHUB_OUTPUT"
+          # The Satanic Edition branch advances its own rolling tag.
+          if [[ "$BRANCH" == "satanic-branding" ]]; then
+            echo "testing_tag=satanic-branding" >> "$GITHUB_OUTPUT"
           else
-            # merge-queue or other refs: publish :SHA tag only, do NOT move stream tags
             echo "testing_tag=" >> "$GITHUB_OUTPUT"
           fi
 
-  # ── Export, sign, attest ─────────────────────────────────────────────────
-  # Pulls artifact from remote CAS, pushes :$sha, signs and attests.
+  # ── Pull, sign, attest ───────────────────────────────────────────────────
+  # Pulls the locally built staging image from GHCR, publishes :$sha, then
+  # signs and attests it. No BuildStream CAS or remote execution is involved.
   # SBOM generation is split to a separate job (publish-sbom) so it runs
   # in parallel with promote rather than blocking it.
   publish-image:
     needs: setup
     runs-on: ubuntu-26.04
     timeout-minutes: 90
-    # Variant matrix: default and NVIDIA publish in parallel from the shared
-    # BST artifact cache. NVIDIA is `continue-on-error: true` so its failure
-    # does not block default publication.
+    # Only the nvidia-gaming image is built locally on this branch.
     strategy:
       fail-fast: false
       matrix:
         include:
-          - variant: default
-            element: oci/bluefin.bst
-            image_suffix: ''
-            sbom_filename: dakota.spdx.json
-            continue: false
-          - variant: nvidia
-            element: oci/bluefin-nvidia.bst
-            image_suffix: '-nvidia'
-            sbom_filename: dakota-nvidia.spdx.json
-            continue: true
-          # Gaming variants: same elements built with `-o gaming true`
-          # (BUILD_GAMING). No SBOM entries yet; publish-sbom stays two-variant.
-          - variant: gaming
-            export_variant: default
-            element: oci/bluefin.bst
-            image_suffix: '-gaming'
-            gaming: 'true'
-            continue: true
           - variant: nvidia-gaming
             export_variant: nvidia
             element: oci/bluefin-nvidia.bst
             image_suffix: '-nvidia-gaming'
             gaming: 'true'
-            continue: true
+            sbom_filename: dakota-nvidia-gaming.spdx.json
+            continue: false
     continue-on-error: ${{ matrix.continue }}
     permissions:
       contents: read
@@ -141,59 +108,13 @@ jobs:
         id: timestamp
         run: echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
-      # Use the runner's Podman stack with native rootful overlay storage.
-      # FUSE-backed storage below chunkify's kernel overlay can return ESTALE.
       - name: Setup runner
         uses: projectbluefin/actions/bootc-build/setup-runner@v1
         with:
           storage-backend: btrfs
           update-podman: true
           native-overlay: true
-          install-tools: '["just"]'
-
-      # Fetch-only BST config — pull artifact from remote CAS, no build/push
-      - name: Generate BST fetch config
-        env:
-          CASD_CLIENT_CERT: ${{ vars.CASD_CLIENT_CERT }}
-          CASD_CLIENT_KEY: ${{ secrets.CASD_CLIENT_KEY }}
-        uses: ./.github/actions/generate-bst-ci-config
-        with:
-          enable-remote-execution: 'false'
-          enable-push: 'false'
-
-      - name: Export OCI image from BuildStream
-        id: export
-        env:
-          BST_FLAGS: -o x86_64_v3 false --no-interactive --config /src/buildstream-ci.conf
-          BUILD_IMAGE_NAME: ${{ env.IMAGE_NAME }}
-          BUILD_GAMING: ${{ matrix.gaming || 'false' }}
-          OCI_IMAGE_CREATED: ${{ steps.timestamp.outputs.created }}
-          OCI_IMAGE_REVISION: ${{ needs.setup.outputs.sha }}
-          OCI_IMAGE_VERSION: latest
-        run: just export ${{ matrix.export_variant || matrix.variant }}
-
-      - name: Chunkify image layers
-        # Use the repository's compiled fakecap helper. The shared chunka action
-        # injects nearly one million manifest entries through Python, which makes
-        # this stage take hours for Dakota's 8–9 GiB images.
-        env:
-          BUILD_IMAGE_NAME: ${{ env.IMAGE_NAME }}${{ matrix.image_suffix }}
-        run: just chunkify "localhost/${BUILD_IMAGE_NAME}:latest"
-
-      - name: Validate with bootc container lint
-        env:
-          BUILD_IMAGE_NAME: ${{ env.IMAGE_NAME }}${{ matrix.image_suffix }}
-        run: just lint
-
-      - name: Audit swap/zram configuration
-        env:
-          BUILD_IMAGE_NAME: ${{ env.IMAGE_NAME }}${{ matrix.image_suffix }}
-        run: just swap-audit
-
-      - name: Audit user-avatar configuration
-        env:
-          BUILD_IMAGE_NAME: ${{ env.IMAGE_NAME }}${{ matrix.image_suffix }}
-        run: just avatar-audit
+          install-tools: '[]'
 
       - name: Login to GHCR
         env:
@@ -204,6 +125,14 @@ jobs:
           mkdir -p ~/.docker
           echo "$GH_TOKEN" | podman login ghcr.io --username "$GH_ACTOR" --password-stdin \
             --compat-auth-file ~/.docker/config.json
+
+      - name: Pull locally built staging image
+        env:
+          BUILD_SHA: ${{ needs.setup.outputs.sha }}
+        run: |
+          IMAGE="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.image_suffix }}"
+          sudo podman pull "${IMAGE}:build-${BUILD_SHA}"
+          sudo podman tag "${IMAGE}:build-${BUILD_SHA}" "localhost/${{ env.IMAGE_NAME }}${{ matrix.image_suffix }}:latest"
 
       - name: Push :${{ needs.setup.outputs.sha }} to GHCR
         id: push
@@ -283,9 +212,18 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+      - name: Remove temporary staging tag
+        env:
+          BUILD_SHA: ${{ needs.setup.outputs.sha }}
+          GH_ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          IMAGE="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.image_suffix }}"
+          skopeo delete --creds "$GH_ACTOR:$GH_TOKEN" "docker://${IMAGE}:build-${BUILD_SHA}"
+
   # ── Generate and attach SBOM ──────────────────────────────────────────────
-  # Runs outside the critical path to :testing. Failures here must not block
-  # publish/promotion. Stable release notes consume the sbom-dakota artifact.
+  # Runs outside the image publication and branch-tag promotion path. SBOM
+  # failures do not undo a successfully signed and published image.
   # P3: pip wheel cache keyed to the pinned buildstream-sbom commit SHA so
   # repeated runs skip the GitLab git fetch entirely.
   publish-sbom:
@@ -296,15 +234,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - variant: default
-            element: oci/bluefin.bst
-            image_suffix: ''
-            sbom_filename: dakota.spdx.json
-            continue: true
-          - variant: nvidia
+          - variant: nvidia-gaming
             element: oci/bluefin-nvidia.bst
-            image_suffix: '-nvidia'
-            sbom_filename: dakota-nvidia.spdx.json
+            image_suffix: '-nvidia-gaming'
+            sbom_filename: dakota-nvidia-gaming.spdx.json
             continue: true
     continue-on-error: ${{ matrix.continue }}
     permissions:
@@ -326,16 +259,8 @@ jobs:
           native-overlay: true
           install-tools: '["just", "cosign"]'
 
-      # BST config for remote CAS — buildstream-sbom calls bst show --deps all
-      # internally which needs element graph resolution via the remote CAS.
-      - name: Generate BST fetch config
-        env:
-          CASD_CLIENT_CERT: ${{ vars.CASD_CLIENT_CERT }}
-          CASD_CLIENT_KEY: ${{ secrets.CASD_CLIENT_KEY }}
+      - name: Generate local BuildStream CI config
         uses: ./.github/actions/generate-bst-ci-config
-        with:
-          enable-remote-execution: 'false'
-          enable-push: 'false'
 
       # Cache the pip wheel for buildstream-sbom across runs.
       # Key is the pinned GitLab commit SHA — auto-invalidates on pin bumps.
@@ -351,13 +276,13 @@ jobs:
       - name: Generate SBOM
         env:
           BST_FLAGS: -o x86_64_v3 false --no-interactive --config /src/buildstream-ci.conf
-        run: just sbom ${{ matrix.variant }}
+        run: just sbom nvidia-gaming
 
       - name: Upload SBOM artifact for release workflow
-        if: matrix.variant == 'default'
-        run: cp dakota.spdx.json dakota.sbom.json
+        if: matrix.variant == 'nvidia-gaming'
+        run: cp dakota-nvidia-gaming.spdx.json dakota.sbom.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: matrix.variant == 'default'
+        if: matrix.variant == 'nvidia-gaming'
         with:
           name: sbom-dakota
           path: dakota.sbom.json
@@ -409,13 +334,11 @@ jobs:
           cosign sign -y \
             "${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.image_suffix }}@${SBOM_DIGEST}"
 
-  # ── Promote :testing ──────────────────────────────────────────────────────
-  # Applies the stream tag to the digest recorded by publish-image.
+  # ── Promote the branch tag ────────────────────────────────────────────────
+  # Applies :satanic-branding to the digest recorded by publish-image.
   # Uses skopeo copy for server-side re-tagging: layers never leave the registry,
   # saving the 20–25 min round-trip of the previous podman pull→tag→push approach.
   # --preserve-digests keeps the promoted tag pointing at the signed manifest digest.
-  # NVIDIA is continue-on-error so a failing NVIDIA promote does not
-  # prevent the default :testing from landing.
   promote:
     needs: [setup, publish-image]
     if: >-
@@ -427,18 +350,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - variant: default
-            image_suffix: ''
-            continue: false
-          - variant: nvidia
-            image_suffix: '-nvidia'
-            continue: true
-          - variant: gaming
-            image_suffix: '-gaming'
-            continue: true
           - variant: nvidia-gaming
             image_suffix: '-nvidia-gaming'
-            continue: true
+            continue: false
     continue-on-error: ${{ matrix.continue }}
     permissions:
       contents: write

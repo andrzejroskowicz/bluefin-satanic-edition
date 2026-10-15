@@ -52,19 +52,19 @@ class CheckPublishWorkflowTests(unittest.TestCase):
         )
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
 
-    def test_rejects_missing_remote_execution_block(self) -> None:
+    def test_rejects_remote_execution_configuration(self) -> None:
         result = self.mutate(
             ".github/actions/generate-bst-ci-config/action.yml",
-            "        remote-execution:\n",
-            "        disabled-executor:\n",
+            "          max-jobs: 2\n",
+            "          max-jobs: 2\n        remote-execution:\n          execution-service:\n            url: https://cache.projectbluefin.io:11002\n",
         )
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
 
-    def test_rejects_serial_build_matrix(self) -> None:
+    def test_rejects_build_without_local_export(self) -> None:
         result = self.mutate(
             ".github/workflows/build.yml",
-            "      max-parallel: 4\n",
-            "      max-parallel: 1\n",
+            "        run: just export nvidia\n",
+            "        run: just export default\n",
         )
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
 
@@ -78,18 +78,18 @@ class CheckPublishWorkflowTests(unittest.TestCase):
         )
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
 
-    def test_rejects_remote_publish_export(self) -> None:
+    def test_rejects_publish_without_staging_pull(self) -> None:
         result = self.mutate(
             ".github/workflows/publish.yml",
-            "          enable-remote-execution: 'false'\n",
-            "          enable-remote-execution: 'true'\n",
+            '          sudo podman pull "${IMAGE}:build-${BUILD_SHA}"\n',
+            '          sudo podman pull "${IMAGE}:${BUILD_SHA}"\n',
         )
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_rejects_inline_variant_matrix_drift(self) -> None:
         result = self.mutate(
             ".github/workflows/publish.yml",
-            "          - variant: nvidia-gaming\n            image_suffix: '-nvidia-gaming'\n            continue: true\n",
+            "          - variant: nvidia-gaming\n            image_suffix: '-nvidia-gaming'\n            continue: false\n",
             "",
         )
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -124,7 +124,7 @@ class CheckPublishWorkflowTests(unittest.TestCase):
     def test_rejects_exclusion_without_a_reason(self) -> None:
         result = self.mutate(
             ".github/image-variants.json",
-            '"excluded": "no SBOM entry wired for gaming builds yet"',
+            '"excluded": "this branch locally builds only nvidia-gaming"',
             '"excluded": ""',
         )
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -136,11 +136,11 @@ class CheckPublishWorkflowTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("not valid JSON", result.stderr)
 
-    def test_rejects_default_sbom_variant_becoming_fail_closed(self) -> None:
+    def test_rejects_nvidia_gaming_sbom_becoming_gating(self) -> None:
         result = self.mutate(
             ".github/image-variants.json",
-            '"sbom": { "continue": true },\n        "tag_testing": { "continue": false }',
-            '"sbom": { "continue": false },\n        "tag_testing": { "continue": false }',
+            '"sbom": {\n          "continue": true\n        }',
+            '"sbom": {\n          "continue": false\n        }',
         )
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
 
@@ -158,26 +158,15 @@ class ImageVariantsMatrixTests(unittest.TestCase):
     def test_declaration_is_valid(self) -> None:
         self.assertEqual(self.image_variants.validate(self.declaration), [])
 
-    def test_publish_matrix_covers_all_four_variants(self) -> None:
+    def test_publish_matrix_contains_only_the_locally_built_variant(self) -> None:
         matrix = self.image_variants.matrix_for(self.declaration, "publish")
-        self.assertEqual(
-            [entry["variant"] for entry in matrix],
-            ["default", "nvidia", "gaming", "nvidia-gaming"],
-        )
+        self.assertEqual([entry["variant"] for entry in matrix], ["nvidia-gaming"])
+        self.assertIs(matrix[0]["continue"], False)
 
-    def test_sbom_matrix_excludes_gaming_variants(self) -> None:
+    def test_sbom_matrix_contains_the_locally_built_variant(self) -> None:
         matrix = self.image_variants.matrix_for(self.declaration, "sbom")
-        self.assertEqual([entry["variant"] for entry in matrix], ["default", "nvidia"])
-
-    def test_gaming_variants_carry_the_build_gaming_flag(self) -> None:
-        matrix = {
-            entry["variant"]: entry
-            for entry in self.image_variants.matrix_for(self.declaration, "publish")
-        }
-        self.assertEqual(matrix["gaming"]["gaming"], "true")
-        self.assertEqual(matrix["gaming"]["export_variant"], "default")
-        self.assertEqual(matrix["nvidia-gaming"]["export_variant"], "nvidia")
-        self.assertNotIn("gaming", matrix["default"])
+        self.assertEqual([entry["variant"] for entry in matrix], ["nvidia-gaming"])
+        self.assertEqual(matrix[0]["sbom_filename"], "dakota-nvidia-gaming.spdx.json")
 
     def test_role_projection_omits_undeclared_fields(self) -> None:
         matrix = self.image_variants.matrix_for(self.declaration, "tag_testing")
@@ -192,12 +181,11 @@ class ImageVariantsMatrixTests(unittest.TestCase):
                 workflow, "publish-image"
             )
         }
-        # Quoting is significant: `gaming: 'true'` is the string consumed by
-        # BUILD_GAMING, while `continue: false` is a real boolean.
-        self.assertEqual(matrix["gaming"]["gaming"], "true")
-        self.assertIs(matrix["default"]["continue"], False)
-        self.assertIs(matrix["nvidia"]["continue"], True)
-        self.assertEqual(matrix["default"]["image_suffix"], "")
+        # Quoting is significant: `gaming: 'true'` is a string, while
+        # `continue: false` is a boolean in the local NVIDIA gaming matrix.
+        self.assertEqual(matrix["nvidia-gaming"]["gaming"], "true")
+        self.assertIs(matrix["nvidia-gaming"]["continue"], False)
+        self.assertEqual(matrix["nvidia-gaming"]["image_suffix"], "-nvidia-gaming")
 
     def test_every_workflow_matrix_matches_the_declaration(self) -> None:
         workflow = (REPOSITORY / ".github/workflows/publish.yml").read_text()

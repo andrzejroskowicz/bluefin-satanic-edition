@@ -8,8 +8,8 @@ disagrees with this page.
 | Workflow | Trigger | Purpose |
 |---|---|---|
 | `validate.yml` | PR and merge queue targeting `testing`, `next`, or `main` | Workflow checks, patch drift, and default/NVIDIA BST graphs |
-| `build.yml` | Relevant pushes to `testing`, daily 13:00 UTC, manual | Build four x86 variants through remote execution |
-| `publish.yml` | Successful build workflow on `testing`/`next`, manual recovery | Export CAS artifacts, publish immutable and stream tags, sign, attest, and attach SBOMs |
+| `build.yml` | Relevant pushes to `satanic-branding`, daily 13:00 UTC, manual | Build and export the NVIDIA gaming x86 image locally, then hand it to publish.yml through a temporary GHCR tag |
+| `publish.yml` | Successful build workflow on `satanic-branding`, manual recovery | Pull the staged local build, publish immutable and `satanic-branding` tags, sign, attest, and attach an SBOM |
 | `e2e.yml` | Manual only | Run testsuite suites against an explicitly published image |
 | `build-aarch64.yml` | Manual only; automatic ARM CI paused | Build the decoupled aarch64 image on explicit request |
 | `boot-test-aarch64.yml` | Manual only; automatic ARM CI paused | Experimental ARM boot validation; requires KVM |
@@ -28,23 +28,26 @@ is not boot-verification evidence. ARM elements and x86 CI are unchanged.
 
 GitHub's [manual workflow documentation](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
 describes `workflow_dispatch`; the workflow must exist on the default branch,
-which is `testing` in Dakota. Scheduled workflows also use that default branch,
+which is `satanic-branding` for this project. Scheduled workflows also use that default branch,
 not `main`.
 
 ## Build and publish contract
 
-`build.yml` places BuildStream artifacts in the remote CAS. `publish.yml` can
-export only artifacts already built for its resolved SHA. Normal flow:
+`build.yml` builds and exports the NVIDIA gaming image on one runner, then
+pushes a temporary `build-<sha>` tag to GHCR. `publish.yml` pulls that image,
+publishes its immutable SHA tag, signs and attests it, and advances the
+`satanic-branding` stream tag. BuildStream uses only its runner-local cache;
+there is no remote execution or remote CAS configuration.
 
 ```text
-testing/next change → build.yml → remote CAS → publish.yml
-                                      └──────→ immutable :SHA
-                                               + :testing or :next
+satanic-branding change → local BuildStream build → GHCR build-<sha>
+                                                  → publish.yml :<sha>
+                                                                  :satanic-branding
 ```
 
-The build matrix contains default, NVIDIA, gaming, and NVIDIA-gaming variants.
-Those siblings intentionally run together; the remote executor is the capacity
-limit.
+The build matrix contains only the NVIDIA gaming variant. Element totals are
+not precomputed; the progress monitor reports completed elements and elapsed
+time without a percentage or ETA.
 
 Publish records the pushed digest and passes that receipt between jobs. Signing,
 attestation, stream-tag promotion, and verification operate on the resolved SHA
@@ -52,16 +55,13 @@ or digest rather than rediscovering mutable tag state.
 
 ## PR builds
 
-Adding the `build` label to a same-repo PR queues a full four-variant build in
-the shared BuildStream queue, behind any running stream build. Each new push to
-a labelled PR queues again; the stale check skips runs a newer push has
-superseded. Fork PRs cannot build: they have no cache credentials and a
-runner-local build does not finish.
-
-A successful PR build exports each variant and pushes
-`ghcr.io/projectbluefin/dakota<suffix>:pr-N`. PR images are unsigned and never
-promoted; `bootc switch` to one to try it. `pr-cleanup.yml` deletes the tags
-when the PR closes.
+Adding the `build` label to a same-repo PR builds the NVIDIA gaming image
+locally and pushes `ghcr.io/<owner>/dakota-nvidia-gaming:pr-N`. Each new push
+to a labelled PR queues again; the stale check skips runs a newer push has
+superseded. Fork PRs cannot push images because they do not receive package
+write credentials. PR images are unsigned and
+never promoted; `bootc switch` to one to try it. `pr-cleanup.yml` deletes the
+tags when the PR closes.
 
 ## Next synchronization
 
@@ -151,8 +151,7 @@ ISO: separate dakota-iso workflow consumes :stable (not main)
   creation; inspect syntax and permissions.
 - Third-party actions are pinned to full SHAs. Managed
   `projectbluefin/actions@v1` references are intentional exceptions.
-- Remote cache access and remote execution are separate; diagnose them
-  independently.
+- The x86 image pipeline is local-only; it does not require CASD credentials.
 - Never report CI as green while required runs are pending or failing.
 - Use `just validate` for local graph/configuration validation. Full image build
   and publication evidence come from CI.

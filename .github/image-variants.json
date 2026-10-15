@@ -39,27 +39,43 @@
     "sbom": {
       "derived": true,
       "consumer": ".github/workflows/publish.yml (publish-sbom)",
-      "fields": ["variant", "element", "image_suffix", "sbom_filename", "continue"]
+      "fields": [
+        "variant",
+        "element",
+        "image_suffix",
+        "sbom_filename",
+        "continue"
+      ]
     },
     "tag_testing": {
       "derived": true,
       "consumer": ".github/workflows/publish.yml (promote)",
-      "fields": ["variant", "image_suffix", "continue"]
+      "fields": [
+        "variant",
+        "image_suffix",
+        "continue"
+      ]
     },
     "promote_stable": {
       "derived": false,
       "consumer": ".github/workflows/execute-release.yml",
-      "fields": ["image"]
+      "fields": [
+        "image"
+      ]
     },
     "scan": {
       "derived": false,
       "consumer": ".github/workflows/vulnerability-scan.yml",
-      "fields": ["image"]
+      "fields": [
+        "image"
+      ]
     },
     "rollback": {
       "derived": false,
       "consumer": ".github/workflows/rollback-stable.yml",
-      "fields": ["image"]
+      "fields": [
+        "image"
+      ]
     }
   },
   "variants": [
@@ -70,9 +86,15 @@
       "image_suffix": "",
       "sbom_filename": "dakota.spdx.json",
       "roles": {
-        "publish": { "continue": false },
-        "sbom": { "continue": true },
-        "tag_testing": { "continue": false },
+        "publish": {
+          "excluded": "this branch locally builds only nvidia-gaming"
+        },
+        "sbom": {
+          "excluded": "this branch locally builds only nvidia-gaming"
+        },
+        "tag_testing": {
+          "excluded": "this branch locally builds only nvidia-gaming"
+        },
         "promote_stable": {},
         "scan": {},
         "rollback": {}
@@ -85,9 +107,15 @@
       "image_suffix": "-nvidia",
       "sbom_filename": "dakota-nvidia.spdx.json",
       "roles": {
-        "publish": { "continue": true },
-        "sbom": { "continue": true },
-        "tag_testing": { "continue": true },
+        "publish": {
+          "excluded": "this branch locally builds only nvidia-gaming"
+        },
+        "sbom": {
+          "excluded": "this branch locally builds only nvidia-gaming"
+        },
+        "tag_testing": {
+          "excluded": "this branch locally builds only nvidia-gaming"
+        },
         "promote_stable": {},
         "scan": {},
         "rollback": {}
@@ -101,9 +129,15 @@
       "image_suffix": "-gaming",
       "gaming": "true",
       "roles": {
-        "publish": { "continue": true },
-        "sbom": { "excluded": "no SBOM entry wired for gaming builds yet" },
-        "tag_testing": { "continue": true },
+        "publish": {
+          "excluded": "this branch locally builds only nvidia-gaming"
+        },
+        "sbom": {
+          "excluded": "this branch locally builds only nvidia-gaming"
+        },
+        "tag_testing": {
+          "excluded": "this branch locally builds only nvidia-gaming"
+        },
         "promote_stable": {},
         "scan": {
           "excluded": "vulnerability-scan.yml has never covered the gaming variants (#1434)"
@@ -121,9 +155,15 @@
       "image_suffix": "-nvidia-gaming",
       "gaming": "true",
       "roles": {
-        "publish": { "continue": true },
-        "sbom": { "excluded": "no SBOM entry wired for gaming builds yet" },
-        "tag_testing": { "continue": true },
+        "publish": {
+          "continue": false
+        },
+        "sbom": {
+          "continue": true
+        },
+        "tag_testing": {
+          "continue": false
+        },
         "promote_stable": {},
         "scan": {
           "excluded": "vulnerability-scan.yml has never covered the gaming variants (#1434)"
@@ -131,7 +171,8 @@
         "rollback": {
           "excluded": "rollback-stable.yml reverts only dakota/dakota-nvidia (#1434)"
         }
-      }
+      },
+      "sbom_filename": "dakota-nvidia-gaming.spdx.json"
     }
   ]
 }

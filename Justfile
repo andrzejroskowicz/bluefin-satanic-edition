@@ -1252,7 +1252,8 @@ sbom variant="default":
     case "{{variant}}" in
         default) ELEMENT="oci/bluefin.bst";        SPDX_NAME="dakota";        OUTFILE="dakota.spdx.json" ;;
         nvidia)  ELEMENT="oci/bluefin-nvidia.bst"; SPDX_NAME="dakota-nvidia"; OUTFILE="dakota-nvidia.spdx.json" ;;
-        *) echo "ERROR: unknown variant '{{variant}}' (expected: default | nvidia)" >&2; exit 1 ;;
+        nvidia-gaming) ELEMENT="oci/bluefin-nvidia.bst"; SPDX_NAME="dakota-nvidia-gaming"; OUTFILE="dakota-nvidia-gaming.spdx.json" ;;
+        *) echo "ERROR: unknown variant '{{variant}}' (expected: default | nvidia | nvidia-gaming)" >&2; exit 1 ;;
     esac
 
     # Persist host-side caches before bind-mounting them into podman.

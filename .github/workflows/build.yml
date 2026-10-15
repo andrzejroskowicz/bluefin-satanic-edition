@@ -102,7 +102,8 @@ jobs:
     if: (!cancelled()) && needs.stale-check.outputs.stale != 'true' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'build') && github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: ubuntu-26.04
     timeout-minutes: 350
-    # This personal build produces only the NVIDIA gaming image.
+    # Build and export the NVIDIA gaming image locally, then hand it to
+    # publish.yml through a temporary GHCR tag instead of a shared CAS.
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -119,6 +120,7 @@ jobs:
       BUILD_GAMING: ${{ matrix.gaming || 'false' }}
     permissions:
       contents: read
+      packages: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -135,17 +137,8 @@ jobs:
           native-overlay: true
           install-tools: '["just"]'
 
-      - name: Generate BuildStream CI config
-        env:
-          CASD_CLIENT_CERT: ${{ vars.CASD_CLIENT_CERT }}
-          CASD_CLIENT_KEY: ${{ secrets.CASD_CLIENT_KEY }}
+      - name: Generate local BuildStream CI config
         uses: ./.github/actions/generate-bst-ci-config
-        with:
-          enable-remote-execution: "true"
-          # BuildStream adds artifact/source push queues to the build when the
-          # configured remotes are writable. RE and the caches share one CAS,
-          # so payloads remain on the BuildBox host and are deduplicated there.
-          enable-push: "true"
 
       - name: Build OCI image with BuildStream
         env:
@@ -157,14 +150,54 @@ jobs:
             | tee "$CONSOLE_LOG" \
             | python3 files/scripts/bst-progress.py
 
-          # Fail closed: a green cache hit is not proof that BuildStream loaded
-          # the remote executor. The startup banner is emitted whenever the
-          # remote-execution block is active, even if no action needs rebuilding.
-          if ! grep -Fq "Remote Execution Configuration" "$CONSOLE_LOG"; then
-            echo "::error::BuildStream did not load the remote execution configuration"
-            exit 1
-          fi
         timeout-minutes: 330
+
+      - name: Export OCI image from local BuildStream artifacts
+        env:
+          BST_FLAGS: -o x86_64_v3 false --no-interactive --config /src/buildstream-ci.conf
+          BUILD_IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          BUILD_GAMING: ${{ matrix.gaming || 'false' }}
+          OCI_IMAGE_CREATED: ${{ steps.timestamp.outputs.created }}
+          OCI_IMAGE_REVISION: ${{ github.sha }}
+          OCI_IMAGE_VERSION: ${{ github.sha }}
+        run: just export nvidia
+
+      - name: Chunkify and validate image
+        env:
+          BUILD_IMAGE_NAME: ${{ env.IMAGE_NAME }}${{ matrix.image_suffix }}
+        run: |
+          just chunkify "localhost/${BUILD_IMAGE_NAME}:latest"
+          just lint
+          just swap-audit
+          just avatar-audit
+
+      - name: Login to GHCR
+        env:
+          GH_ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GH_TOKEN" | sudo podman login ghcr.io --username "$GH_ACTOR" --password-stdin
+
+      - name: Push staging image for publish workflow
+        if: github.event_name != 'pull_request'
+        env:
+          BUILD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          LOCAL_IMAGE="${{ env.IMAGE_NAME }}${{ matrix.image_suffix }}"
+          IMAGE="${{ env.IMAGE_REGISTRY }}/${LOCAL_IMAGE}"
+          sudo podman tag "localhost/${LOCAL_IMAGE}:latest" "${IMAGE}:build-${BUILD_SHA}"
+          sudo podman push --compression-format=zstd "${IMAGE}:build-${BUILD_SHA}"
+
+      - name: Push PR image
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TAG: pr-${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          LOCAL_IMAGE="${{ env.IMAGE_NAME }}${{ matrix.image_suffix }}"
+          IMAGE="${{ env.IMAGE_REGISTRY }}/${LOCAL_IMAGE}"
+          sudo podman tag "localhost/${LOCAL_IMAGE}:latest" "${IMAGE}:${PR_TAG}"
+          sudo podman push --compression-format=zstd "${IMAGE}:${PR_TAG}"
 
       - name: Upload build logs
         if: always()
@@ -174,93 +207,6 @@ jobs:
           path: logs/
           retention-days: 7
           if-no-files-found: ignore
-
-  # PR images: export from the shared cache and push :pr-N. Never signed or
-  # promoted; publish.yml ignores pull_request runs.
-  pr-image:
-    needs: build
-    if: (!cancelled()) && needs.build.result == 'success' && (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'build') && github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: ubuntu-26.04
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - variant: nvidia-gaming
-            export_variant: nvidia
-            image_suffix: "-nvidia-gaming"
-            gaming: "true"
-    permissions:
-      contents: read
-      packages: write
-    env:
-      PR_TAG: pr-${{ github.event.pull_request.number }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - name: Capture build timestamp
-        id: timestamp
-        run: echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-
-      - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@v1
-        with:
-          storage-backend: btrfs
-          update-podman: true
-          native-overlay: true
-          install-tools: '["just"]'
-
-      - name: Generate BST fetch config
-        env:
-          CASD_CLIENT_CERT: ${{ vars.CASD_CLIENT_CERT }}
-          CASD_CLIENT_KEY: ${{ secrets.CASD_CLIENT_KEY }}
-        uses: ./.github/actions/generate-bst-ci-config
-        with:
-          enable-remote-execution: 'false'
-          enable-push: 'false'
-
-      - name: Export OCI image from BuildStream
-        env:
-          BST_FLAGS: -o x86_64_v3 false --no-interactive --config /src/buildstream-ci.conf
-          BUILD_IMAGE_NAME: ${{ env.IMAGE_NAME }}
-          BUILD_GAMING: ${{ matrix.gaming || 'false' }}
-          OCI_IMAGE_CREATED: ${{ steps.timestamp.outputs.created }}
-          OCI_IMAGE_REVISION: ${{ github.event.pull_request.head.sha }}
-          OCI_IMAGE_VERSION: ${{ env.PR_TAG }}
-        run: just export ${{ matrix.export_variant || matrix.variant }}
-
-      - name: Chunkify image layers
-        env:
-          BUILD_IMAGE_NAME: ${{ env.IMAGE_NAME }}${{ matrix.image_suffix }}
-        run: just chunkify "localhost/${BUILD_IMAGE_NAME}:latest"
-
-      - name: Validate with bootc container lint
-        env:
-          BUILD_IMAGE_NAME: ${{ env.IMAGE_NAME }}${{ matrix.image_suffix }}
-        run: just lint
-
-      - name: Login to GHCR
-        env:
-          GH_ACTOR: ${{ github.actor }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: echo "$GH_TOKEN" | sudo podman login ghcr.io --username "$GH_ACTOR" --password-stdin
-
-      - name: Push :${{ env.PR_TAG }} to GHCR
-        run: |
-          set -euo pipefail
-          LOCAL_IMAGE="${{ env.IMAGE_NAME }}${{ matrix.image_suffix }}"
-          IMAGE="${{ env.IMAGE_REGISTRY }}/${LOCAL_IMAGE}"
-          sudo podman tag "localhost/${LOCAL_IMAGE}:latest" "${IMAGE}:${PR_TAG}"
-          for attempt in 1 2 3; do
-            sudo podman push --compression-format=zstd \
-              --digestfile /tmp/digest.txt "${IMAGE}:${PR_TAG}" && break
-            [ "$attempt" -lt 3 ] || { echo "ERROR: push failed for ${IMAGE}:${PR_TAG}"; exit 1; }
-            sleep 5
-          done
-          DIGEST=$(cat /tmp/digest.txt)
-          echo "${IMAGE}:${PR_TAG} @ ${DIGEST}"
-          echo "- \`${IMAGE}:${PR_TAG}\` \`${DIGEST}\`" >> "$GITHUB_STEP_SUMMARY"
 
   # Required check: pending until a `build`-labeled PR has built.
   build-gate:
