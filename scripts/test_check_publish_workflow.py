@@ -71,10 +71,10 @@ class CheckPublishWorkflowTests(unittest.TestCase):
     def test_rejects_explicit_artifact_pull(self) -> None:
         result = self.mutate(
             ".github/workflows/build.yml",
-            "      - name: Count elements for progress tracking\n",
+            "      - name: Build OCI image with BuildStream\n",
             "      - name: Pull prebuilt artifacts from remote CAS\n"
             "        run: true\n\n"
-            "      - name: Count elements for progress tracking\n",
+            "      - name: Build OCI image with BuildStream\n",
         )
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
 
