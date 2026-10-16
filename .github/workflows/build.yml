@@ -142,7 +142,12 @@ jobs:
 
       - name: Build OCI image with BuildStream
         env:
-          BST_FLAGS: -o x86_64_v3 false --no-interactive --config /src/buildstream-ci.conf
+          BST_FLAGS: >-
+            --builders 1
+            --max-jobs 2
+            -o x86_64_v3 false
+            --no-interactive
+            --config /src/buildstream-ci.conf
         run: |
           set -o pipefail
           CONSOLE_LOG="logs/bst-console-${{ matrix.variant }}.log"
